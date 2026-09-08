@@ -929,7 +929,13 @@ public class PlayerActivity extends Activity {
                     isNearEnd = true;
                 }
             }
-            setEndControlsVisible(haveMedia && (state == Player.STATE_ENDED || isNearEnd));
+            
+            if (state == Player.STATE_ENDED) {
+                playerView.hideController();
+                setEndControlsVisible(false);
+            } else {
+                setEndControlsVisible(haveMedia && isNearEnd);
+            }
 
             if (state == Player.STATE_READY) {
                 frameRendered = true;
