@@ -53,9 +53,6 @@
       <ImageButton android:id="@+id/exo_repeat_toggle"
           style="@style/ExoStyledControls.Button.Bottom.RepeatToggle"/>
 
-      <ImageButton android:id="@+id/exo_subtitle"
-          style="@style/ExoStyledControls.Button.Bottom.CC"/>
-
       <ImageButton android:id="@+id/exo_settings"
           style="@style/ExoStyledControls.Button.Bottom.Settings"/>
 
