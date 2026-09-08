@@ -42,7 +42,6 @@ import android.view.KeyEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
@@ -52,7 +51,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.documentfile.provider.DocumentFile;
 
@@ -77,9 +75,7 @@ import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
-import com.google.android.exoplayer2.ui.CaptionStyleCompat;
 import com.google.android.exoplayer2.ui.StyledPlayerControlView;
-import com.google.android.exoplayer2.ui.SubtitleView;
 import com.google.android.exoplayer2.ui.TimeBar;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.material.snackbar.Snackbar;
@@ -128,6 +124,16 @@ public class PlayerActivity extends Activity {
     private static final int CONTROL_TYPE_PLAY = 1;
     private static final int CONTROL_TYPE_PAUSE = 2;
 
+    private CoordinatorLayout coordinatorLayout;
+    private TextView titleView;
+    private ImageButton buttonAspectRatio;
+    private ImageButton exoPlayPause;
+    private ProgressBar loadingProgressBar;
+    private StyledPlayerControlView controlView;
+
+    final Rational rationalLimitWide = new Rational(239, 100);
+    final Rational rationalLimitTall = new Rational(100, 239);
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Rotate ASAP, before super/inflating to avoid glitches with activity launch animation
@@ -143,8 +149,6 @@ public class PlayerActivity extends Activity {
 
         if (getIntent().getData() != null) {
             mPrefs.updateMedia(this, getIntent().getData(), getIntent().getType());
-            searchSubtitles();
-			focusPlay = true;
         }
 
         coordinatorLayout = findViewById(R.id.coordinatorLayout);
@@ -166,42 +170,6 @@ public class PlayerActivity extends Activity {
         // https://github.com/google/ExoPlayer/issues/5765
         CustomDefaultTimeBar timeBar = playerView.findViewById(R.id.exo_progress);
         timeBar.setBufferedColor(0x33FFFFFF);
-
-        timeBar.addListener(new TimeBar.OnScrubListener() {
-            @Override
-            public void onScrubStart(TimeBar timeBar, long position) {
-                if (player == null) {
-                    return;
-                }
-                restorePlayState = player.isPlaying();
-                if (restorePlayState) {
-                    player.pause();
-                }
-                scrubbingNoticeable = false;
-                isScrubbing = true;
-                frameRendered = true;
-                playerView.setControllerShowTimeoutMs(-1);
-                scrubbingStart = player.getCurrentPosition();
-                player.setSeekParameters(SeekParameters.CLOSEST_SYNC);
-                reportScrubbing(position);
-            }
-
-            @Override
-            public void onScrubMove(TimeBar timeBar, long position) {
-                reportScrubbing(position);
-            }
-
-            @Override
-            public void onScrubStop(TimeBar timeBar, long position, boolean canceled) {
-                playerView.setCustomErrorMessage(null);
-                isScrubbing = false;
-                if (restorePlayState) {
-                    restorePlayState = false;
-                    playerView.setControllerShowTimeoutMs(PlayerActivity.CONTROLLER_TIMEOUT);
-                    player.setPlayWhenReady(true);
-                }
-            }
-        });
 
         buttonAspectRatio = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
         buttonAspectRatio.setImageResource(R.drawable.ic_aspect_ratio_24dp);
@@ -752,6 +720,9 @@ public class PlayerActivity extends Activity {
             titleView.setText(Utils.getFileName(this, mPrefs.mediaUri));
             titleView.setVisibility(View.VISIBLE);
 
+            if (buttonPiP != null)
+                Utils.setButtonEnabled(this, buttonPiP, true);
+
             Utils.setButtonEnabled(this, buttonAspectRatio, true);
 
             ((DoubleTapPlayerView)playerView).setDoubleTapEnabled(true);
@@ -798,6 +769,8 @@ public class PlayerActivity extends Activity {
             player = null;
         }
         titleView.setVisibility(View.GONE);
+        if (buttonPiP != null)
+            Utils.setButtonEnabled(this, buttonPiP, false);
         Utils.setButtonEnabled(this, buttonAspectRatio, false);
     }
 
@@ -805,6 +778,14 @@ public class PlayerActivity extends Activity {
         @Override
         public void onIsPlayingChanged(boolean isPlaying) {
             playerView.setKeepScreenOn(isPlaying);
+
+            if (isPiPSupported()) {
+                if (isPlaying) {
+                    updatePictureInPictureActions(R.drawable.ic_pause_24dp, "Pause", CONTROL_TYPE_PAUSE, REQUEST_PAUSE);
+                } else {
+                    updatePictureInPictureActions(R.drawable.ic_play_arrow_24dp, "Play", CONTROL_TYPE_PLAY, REQUEST_PLAY);
+                }
+            }
 
             if (!isScrubbing) {
                 if (isPlaying) {
@@ -1120,32 +1101,39 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    void setSubtitleTextSize() {
+    void setSubtitleTextSizePiP() {
         final SubtitleView subtitleView = playerView.getSubtitleView();
-        if (subtitleView != null) {
-            float size;
-            int orientation = getResources().getConfiguration().orientation;
+        if (subtitleView != null)
+            subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 2);
+    }
 
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                size = SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitlesScale;
-            } else {
-                DisplayMetrics displayMetrics = new DisplayMetrics();
-                getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-                int widthPixels = displayMetrics.widthPixels;
-                int heightPixels = displayMetrics.heightPixels;
-                float ratio = (float) Math.min(widthPixels, heightPixels) / (float) Math.max(widthPixels, heightPixels);
-                size = SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitlesScale / ratio;
-            }
+    boolean isPiPSupported() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+    }
 
-            subtitleView.setFractionalTextSize(size);
-        }
+    @TargetApi(26)
+    void updatePictureInPictureActions(final int iconId, final String title, final int controlType, final int requestCode) {
+        final ArrayList<RemoteAction> actions = new ArrayList<>();
+        final PendingIntent intent = PendingIntent.getBroadcast(PlayerActivity.this, requestCode,
+                        new Intent(ACTION_MEDIA_CONTROL).putExtra(EXTRA_CONTROL_TYPE, controlType), PendingIntent.FLAG_IMMUTABLE);
+        final Icon icon = Icon.createWithResource(PlayerActivity.this, iconId);
+        actions.add(new RemoteAction(icon, title, title, intent));
+        ((PictureInPictureParams.Builder)mPictureInPictureParamsBuilder).setActions(actions);
+        setPictureInPictureParams(((PictureInPictureParams.Builder)mPictureInPictureParamsBuilder).build());
+    }
+
+    private boolean isInPip() {
+        if (!isPiPSupported())
+            return false;
+        return isInPictureInPictureMode();
     }
 
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
 
-        setSubtitleTextSize(newConfig.orientation);
+        if (!isInPip())
+            setSubtitleTextSize(newConfig.orientation);
     }
 
     void showError(ExoPlaybackException error) {
@@ -1354,9 +1342,51 @@ public class PlayerActivity extends Activity {
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onUserLeaveHint() {
-        super.onUserLeaveHint();
+        if (mPrefs!= null && mPrefs.autoPiP && player != null && player.isPlaying() && isPiPSupported())
+            enterPiP();
+        else
+            super.onUserLeaveHint();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void enterPiP() {
+        final AppOpsManager appOpsManager = (AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+        if (AppOpsManager.MODE_ALLOWED != appOpsManager.checkOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, android.os.Process.myUid(), getPackageName())) {
+            startActivity(new Intent("android.settings.PICTURE_IN_PICTURE_SETTINGS", Uri.fromParts("package", getPackageName(), null)));
+            return;
+        }
+
+        playerView.setControllerAutoShow(false);
+		playerView.setControllerShowTimeoutMs(0);
+        playerView.hideController();
+
+        final Format format = player.getVideoFormat();
+
+        if (format != null) {
+            // https://github.com/google/ExoPlayer/issues/8611
+            // TODO: Test/disable on Android 11+
+            final View videoSurfaceView = playerView.getVideoSurfaceView();
+            if (videoSurfaceView instanceof SurfaceView) {
+                ((SurfaceView)videoSurfaceView).getHolder().setFixedSize(format.width, format.height);
+            }
+
+            Rational rational;
+            if (Utils.isRotated(format))
+                rational = new Rational(format.height, format.width);
+            else
+                rational = new Rational(format.width, format.height);
+
+            if (rational.floatValue() > rationalLimitWide.floatValue())
+                rational = rationalLimitWide;
+            else if (rational.floatValue() < rationalLimitTall.floatValue())
+                rational = rationalLimitTall;
+
+            ((PictureInPictureParams.Builder)mPictureInPictureParamsBuilder).setAspectRatio(rational);
+        }
+        enterPictureInPictureMode(((PictureInPictureParams.Builder)mPictureInPictureParamsBuilder).build());
     }
 
     void setEndControlsVisible(boolean visible) {

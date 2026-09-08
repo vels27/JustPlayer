@@ -2,11 +2,9 @@
 *.class
 *.o
 *.obj
-*.so
-*.a
-*.dll
-*.exe
 *.out
+build/
+target/
 
 # Dependencies
 node_modules/
@@ -15,12 +13,7 @@ venv/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
-target/
 .gradle/
-
-# Build directories
-build/
-dist/
 
 # Logs and temp files
 *.log
@@ -35,10 +28,38 @@ dist/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# System files
+# System
 .DS_Store
 Thumbs.db
+
+# Coverage
 coverage/
 htmlcov/
 .coverage
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
