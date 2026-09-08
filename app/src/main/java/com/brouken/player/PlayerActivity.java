@@ -51,6 +51,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.documentfile.provider.DocumentFile;
 
@@ -75,6 +76,8 @@ import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
+import com.google.android.exoplayer2.ui.CaptionStyleCompat;
+import com.google.android.exoplayer2.ui.SubtitleView;
 import com.google.android.exoplayer2.ui.StyledPlayerControlView;
 import com.google.android.exoplayer2.ui.TimeBar;
 import com.google.android.exoplayer2.util.MimeTypes;
@@ -112,6 +115,21 @@ public class PlayerActivity extends Activity {
     public static Snackbar snackbar;
     private ExoPlaybackException errorToShow;
     public static int boostLevel = 0;
+
+    // State variables
+    private boolean alive;
+    private boolean focusPlay;
+    private boolean restorePlayState;
+    private boolean restoreOrientationLock;
+    private boolean restoreControllerTimeout;
+    private boolean shortControllerTimeout;
+    private boolean isScrubbing;
+    private boolean scrubbingNoticeable;
+    private boolean frameRendered;
+    private long scrubbingStart;
+    private float subtitlesScale;
+    private Uri nextUri;
+    private boolean play;
 
     private static final int REQUEST_CHOOSER_VIDEO = 1;
     private static final int REQUEST_CHOOSER_SUBTITLE = 2;
@@ -720,9 +738,6 @@ public class PlayerActivity extends Activity {
             titleView.setText(Utils.getFileName(this, mPrefs.mediaUri));
             titleView.setVisibility(View.VISIBLE);
 
-            if (buttonPiP != null)
-                Utils.setButtonEnabled(this, buttonPiP, true);
-
             Utils.setButtonEnabled(this, buttonAspectRatio, true);
 
             ((DoubleTapPlayerView)playerView).setDoubleTapEnabled(true);
@@ -769,8 +784,6 @@ public class PlayerActivity extends Activity {
             player = null;
         }
         titleView.setVisibility(View.GONE);
-        if (buttonPiP != null)
-            Utils.setButtonEnabled(this, buttonPiP, false);
         Utils.setButtonEnabled(this, buttonAspectRatio, false);
     }
 
@@ -1126,14 +1139,6 @@ public class PlayerActivity extends Activity {
         if (!isPiPSupported())
             return false;
         return isInPictureInPictureMode();
-    }
-
-    @Override
-    public void onConfigurationChanged(@NonNull Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-
-        if (!isInPip())
-            setSubtitleTextSize(newConfig.orientation);
     }
 
     void showError(ExoPlaybackException error) {
