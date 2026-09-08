@@ -58,8 +58,6 @@ import androidx.documentfile.provider.DocumentFile;
 
 import com.brouken.player.dtpv.DoubleTapPlayerView;
 import com.brouken.player.dtpv.youtube.YouTubeOverlay;
-import com.getkeepsafe.taptargetview.TapTarget;
-import com.getkeepsafe.taptargetview.TapTargetView;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -231,20 +229,7 @@ public class PlayerActivity extends Activity {
             }
         });
 
-        buttonOpen = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
-        buttonOpen.setImageResource(R.drawable.ic_folder_open_24dp);
-        buttonOpen.setId(View.generateViewId());
 
-        buttonOpen.setOnClickListener(view -> openFile(mPrefs.mediaUri));
-
-        buttonOpen.setOnLongClickListener(view -> {
-            if (!Utils.isTvBox(this) && mPrefs.askScope) {
-                askForScope(true, false);
-            } else {
-                loadSubtitleFile(mPrefs.mediaUri);
-            }
-            return true;
-        });
 
         if (isPiPSupported()) {
             // TODO: Android 12 improvements:
@@ -398,8 +383,6 @@ public class PlayerActivity extends Activity {
         }
 
         final LinearLayout exoBasicControls = playerView.findViewById(R.id.exo_basic_controls);
-        final ImageButton exoSubtitle = exoBasicControls.findViewById(R.id.exo_subtitle);
-        exoBasicControls.removeView(exoSubtitle);
 
         final ImageButton exoSettings = exoBasicControls.findViewById(R.id.exo_settings);
         exoBasicControls.removeView(exoSettings);
@@ -413,8 +396,6 @@ public class PlayerActivity extends Activity {
         final HorizontalScrollView horizontalScrollView = (HorizontalScrollView) getLayoutInflater().inflate(R.layout.controls, null);
         final LinearLayout controls = horizontalScrollView.findViewById(R.id.controls);
 
-        controls.addView(buttonOpen);
-        controls.addView(exoSubtitle);
         controls.addView(buttonAspectRatio);
         if (isPiPSupported()) {
             controls.addView(buttonPiP);
@@ -458,26 +439,6 @@ public class PlayerActivity extends Activity {
                 }
 
                 if (controllerVisible && playerView.isControllerFullyVisible()) {
-                    if (mPrefs.firstRun) {
-                        TapTargetView.showFor(PlayerActivity.this,
-                                TapTarget.forView(buttonOpen, getString(R.string.onboarding_open_title), getString(R.string.onboarding_open_description))
-                                        .outerCircleColor(R.color.green)
-                                        .targetCircleColor(R.color.white)
-                                        .titleTextSize(22)
-                                        .titleTextColor(R.color.white)
-                                        .descriptionTextSize(14)
-                                        .cancelable(true),
-                                new TapTargetView.Listener() {
-                                    @Override
-                                    public void onTargetClick(TapTargetView view) {
-                                        super.onTargetClick(view);
-                                        buttonOpen.performClick();
-                                    }
-                                });
-                        // TODO: Explain gestures?
-                        //  "Use vertical and horizontal gestures to change brightness, volume and seek in video"
-                        mPrefs.markFirstRun();
-                    }
                     if (errorToShow != null) {
                         showError(errorToShow);
                         errorToShow = null;
