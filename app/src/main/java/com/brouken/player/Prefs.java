@@ -89,8 +89,7 @@ class Prefs {
     public void updateMedia(final Context context, final Uri uri, final String type) {
         mediaUri = uri;
         mediaType = type;
-        updateSubtitle(null);
-        updateMeta(-1, -1, -1, AspectRatioFrameLayout.RESIZE_MODE_FIT, 1.f);
+        updateMeta(-1, -1, AspectRatioFrameLayout.RESIZE_MODE_FIT, 1.f);
 
         if (mediaType != null && mediaType.endsWith("/*")) {
             mediaType = null;
@@ -192,20 +191,11 @@ class Prefs {
 
         // Return position for uri from limited scope (loaded after using Next action)
         if (ContentResolver.SCHEME_CONTENT.equals(mediaUri.getScheme())) {
-            final String searchPath = SubtitleUtils.getTrailPathFromUri(mediaUri);
-            if (searchPath == null || searchPath.length() < 1)
-                return 0L;
             final Set<String> keySet = positions.keySet();
             final Object[] keys = keySet.toArray();
             for (int i = keys.length; i > 0; i--) {
                 final String key = (String) keys[i - 1];
                 final Uri uri = Uri.parse(key);
-                if (ContentResolver.SCHEME_CONTENT.equals(uri.getScheme())) {
-                    final String keyPath = SubtitleUtils.getTrailPathFromUri(uri);
-                    if (searchPath.equals(keyPath)) {
-                        return (long) positions.get(key);
-                    }
-                }
             }
         }
 
@@ -218,10 +208,9 @@ class Prefs {
         sharedPreferencesEditor.commit();
     }
 
-    public void updateMeta(final int audioTrack, final int audioTrackFfmpeg, final int subtitleTrack, final int resizeMode, final float scale) {
+    public void updateMeta(final int audioTrack, final int audioTrackFfmpeg, final int resizeMode, final float scale) {
         this.audioTrack = audioTrack;
         this.audioTrackFfmpeg = audioTrackFfmpeg;
-        this.subtitleTrack = subtitleTrack;
         this.resizeMode = resizeMode;
         this.scale = scale;
         final SharedPreferences.Editor sharedPreferencesEditor = mSharedPreferences.edit();

@@ -16,11 +16,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.UriPermission;
 import android.content.pm.ActivityInfo;
-import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.graphics.drawable.Icon;
 import android.media.AudioManager;
 import android.media.audiofx.LoudnessEnhancer;
@@ -34,22 +32,18 @@ import android.provider.Settings;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.text.TextUtils;
-import android.util.DisplayMetrics;
 import android.util.Rational;
 import android.util.TypedValue;
-import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
@@ -58,8 +52,6 @@ import androidx.documentfile.provider.DocumentFile;
 
 import com.brouken.player.dtpv.DoubleTapPlayerView;
 import com.brouken.player.dtpv.youtube.YouTubeOverlay;
-import com.getkeepsafe.taptargetview.TapTarget;
-import com.getkeepsafe.taptargetview.TapTargetView;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -79,11 +71,8 @@ import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.ui.AspectRatioFrameLayout;
-import com.google.android.exoplayer2.ui.CaptionStyleCompat;
 import com.google.android.exoplayer2.ui.StyledPlayerControlView;
-import com.google.android.exoplayer2.ui.SubtitleView;
 import com.google.android.exoplayer2.ui.TimeBar;
-import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.File;
@@ -91,7 +80,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -120,7 +108,6 @@ public class PlayerActivity extends Activity {
     public static int boostLevel = 0;
 
     private static final int REQUEST_CHOOSER_VIDEO = 1;
-    private static final int REQUEST_CHOOSER_SUBTITLE = 2;
     private static final int REQUEST_CHOOSER_SCOPE_DIR = 10;
     public static final int CONTROLLER_TIMEOUT = 3500;
     private static final String ACTION_MEDIA_CONTROL = "media_control";
@@ -132,8 +119,7 @@ public class PlayerActivity extends Activity {
 
     private CoordinatorLayout coordinatorLayout;
     private TextView titleView;
-    private ImageButton buttonOpen;
-    private ImageButton buttonPiP;
+
     private ImageButton buttonAspectRatio;
     private ImageButton exoPlayPause;
     private ProgressBar loadingProgressBar;
@@ -142,7 +128,7 @@ public class PlayerActivity extends Activity {
     private boolean restoreOrientationLock;
     private boolean restorePlayState;
     private boolean play;
-    private float subtitlesScale;
+
     private boolean isScrubbing;
     private boolean scrubbingNoticeable;
     private long scrubbingStart;
@@ -171,7 +157,6 @@ public class PlayerActivity extends Activity {
 
         if (getIntent().getData() != null) {
             mPrefs.updateMedia(this, getIntent().getData(), getIntent().getType());
-            searchSubtitles();
 			focusPlay = true;
         }
 
@@ -191,7 +176,6 @@ public class PlayerActivity extends Activity {
 
         ((DoubleTapPlayerView)playerView).setDoubleTapEnabled(false);
 
-        // https://github.com/google/ExoPlayer/issues/5765
         CustomDefaultTimeBar timeBar = playerView.findViewById(R.id.exo_progress);
         timeBar.setBufferedColor(0x33FFFFFF);
 
@@ -231,43 +215,6 @@ public class PlayerActivity extends Activity {
             }
         });
 
-        buttonOpen = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
-        buttonOpen.setImageResource(R.drawable.ic_folder_open_24dp);
-        buttonOpen.setId(View.generateViewId());
-
-        buttonOpen.setOnClickListener(view -> openFile(mPrefs.mediaUri));
-
-        buttonOpen.setOnLongClickListener(view -> {
-            if (!Utils.isTvBox(this) && mPrefs.askScope) {
-                askForScope(true, false);
-            } else {
-                loadSubtitleFile(mPrefs.mediaUri);
-            }
-            return true;
-        });
-
-        if (isPiPSupported()) {
-            // TODO: Android 12 improvements:
-            // https://developer.android.com/about/versions/12/features/pip-improvements
-            mPictureInPictureParamsBuilder = new PictureInPictureParams.Builder();
-            updatePictureInPictureActions(R.drawable.ic_play_arrow_24dp, "Play", CONTROL_TYPE_PLAY, REQUEST_PLAY);
-
-            buttonPiP = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
-            buttonPiP.setImageResource(R.drawable.ic_picture_in_picture_alt_24dp);
-
-            buttonPiP.setOnClickListener(view -> {
-                enterPiP();
-            });
-
-            buttonPiP.setOnLongClickListener(v -> {
-                buttonPiP.performHapticFeedback(mPrefs.toggleAutoPiP() ?
-                        HapticFeedbackConstants.VIRTUAL_KEY : HapticFeedbackConstants.LONG_PRESS);
-                resetHideCallbacks();
-                return true;
-            });
-
-            Utils.setButtonEnabled(this, buttonPiP, false);
-        }
 
         buttonAspectRatio = new ImageButton(this, null, 0, R.style.ExoStyledControls_Button_Bottom);
         buttonAspectRatio.setImageResource(R.drawable.ic_aspect_ratio_24dp);
@@ -398,8 +345,6 @@ public class PlayerActivity extends Activity {
         }
 
         final LinearLayout exoBasicControls = playerView.findViewById(R.id.exo_basic_controls);
-        final ImageButton exoSubtitle = exoBasicControls.findViewById(R.id.exo_subtitle);
-        exoBasicControls.removeView(exoSubtitle);
 
         final ImageButton exoSettings = exoBasicControls.findViewById(R.id.exo_settings);
         exoBasicControls.removeView(exoSettings);
@@ -413,12 +358,9 @@ public class PlayerActivity extends Activity {
         final HorizontalScrollView horizontalScrollView = (HorizontalScrollView) getLayoutInflater().inflate(R.layout.controls, null);
         final LinearLayout controls = horizontalScrollView.findViewById(R.id.controls);
 
-        controls.addView(buttonOpen);
-        controls.addView(exoSubtitle);
+
         controls.addView(buttonAspectRatio);
-        if (isPiPSupported()) {
-            controls.addView(buttonPiP);
-        }
+
         if (!Utils.isTvBox(this)) {
             controls.addView(buttonRotation);
         }
@@ -459,21 +401,6 @@ public class PlayerActivity extends Activity {
 
                 if (controllerVisible && playerView.isControllerFullyVisible()) {
                     if (mPrefs.firstRun) {
-                        TapTargetView.showFor(PlayerActivity.this,
-                                TapTarget.forView(buttonOpen, getString(R.string.onboarding_open_title), getString(R.string.onboarding_open_description))
-                                        .outerCircleColor(R.color.green)
-                                        .targetCircleColor(R.color.white)
-                                        .titleTextSize(22)
-                                        .titleTextColor(R.color.white)
-                                        .descriptionTextSize(14)
-                                        .cancelable(true),
-                                new TapTargetView.Listener() {
-                                    @Override
-                                    public void onTargetClick(TapTargetView view) {
-                                        super.onTargetClick(view);
-                                        buttonOpen.performClick();
-                                    }
-                                });
                         // TODO: Explain gestures?
                         //  "Use vertical and horizontal gestures to change brightness, volume and seek in video"
                         mPrefs.markFirstRun();
@@ -491,7 +418,6 @@ public class PlayerActivity extends Activity {
     public void onStart() {
         super.onStart();
         alive = true;
-        updateSubtitleStyle();
         initializePlayer();
     }
 
@@ -513,7 +439,6 @@ public class PlayerActivity extends Activity {
 
         if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
             mPrefs.updateMedia(this, intent.getData(), intent.getType());
-            searchSubtitles();
 			focusPlay = true;
             initializePlayer();
         }
@@ -614,7 +539,6 @@ public class PlayerActivity extends Activity {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
 
         if (isInPictureInPictureMode) {
-            setSubtitleTextSizePiP();
             playerView.setScale(1.f);
             mReceiver = new BroadcastReceiver() {
                 @Override
@@ -635,7 +559,6 @@ public class PlayerActivity extends Activity {
             };
             registerReceiver(mReceiver, new IntentFilter(ACTION_MEDIA_CONTROL));
         } else {
-            setSubtitleTextSize();
             if (mPrefs.resizeMode == AspectRatioFrameLayout.RESIZE_MODE_ZOOM) {
                 playerView.setScale(mPrefs.scale);
             }
@@ -692,23 +615,6 @@ public class PlayerActivity extends Activity {
                 }
 
                 mPrefs.updateMedia(this, uri, data.getType());
-                searchSubtitles();
-            }
-        } else if (requestCode == REQUEST_CHOOSER_SUBTITLE) {
-            if (resultCode == RESULT_OK) {
-                Uri uri = data.getData();
-
-                try {
-                    getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                } catch (SecurityException e) {
-                    e.printStackTrace();
-                }
-
-                // Convert subtitles to UTF-8 if necessary
-                SubtitleUtils.clearCache(this);
-                uri = SubtitleUtils.convertToUTF(this, uri);
-
-                mPrefs.updateSubtitle(uri);
             }
         } else if (requestCode == REQUEST_CHOOSER_SCOPE_DIR) {
             if (resultCode == RESULT_OK) {
@@ -717,7 +623,6 @@ public class PlayerActivity extends Activity {
                     getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     mPrefs.updateScope(uri);
                     mPrefs.markScopeAsked();
-                    searchSubtitles();
                 } catch (SecurityException e) {
                     e.printStackTrace();
                 }
@@ -826,17 +731,6 @@ public class PlayerActivity extends Activity {
             MediaItem.Builder mediaItemBuilder = new MediaItem.Builder()
                     .setUri(mPrefs.mediaUri)
                     .setMimeType(mPrefs.mediaType);
-            if (mPrefs.subtitleUri != null && Utils.fileExists(this, mPrefs.subtitleUri)) {
-                final String subtitleMime = SubtitleUtils.getSubtitleMime(mPrefs.subtitleUri);
-                final String subtitleLanguage = SubtitleUtils.getSubtitleLanguage(mPrefs.subtitleUri);
-                String subtitleName = null;
-                if (subtitleLanguage == null)
-                    subtitleName = Utils.getFileName(this, mPrefs.subtitleUri);
-
-                MediaItem.Subtitle subtitle = new MediaItem.Subtitle(mPrefs.subtitleUri, subtitleMime,
-                        subtitleLanguage, C.SELECTION_FLAG_DEFAULT, C.ROLE_FLAG_SUBTITLE, subtitleName);
-                mediaItemBuilder.setSubtitles(Collections.singletonList(subtitle));
-            }
             player.setMediaItem(mediaItemBuilder.build());
 
             if (loudnessEnhancer != null) {
@@ -876,8 +770,6 @@ public class PlayerActivity extends Activity {
             titleView.setText(Utils.getFileName(this, mPrefs.mediaUri));
             titleView.setVisibility(View.VISIBLE);
 
-            if (buttonPiP != null)
-                Utils.setButtonEnabled(this, buttonPiP, true);
 
             Utils.setButtonEnabled(this, buttonAspectRatio, true);
 
@@ -913,7 +805,7 @@ public class PlayerActivity extends Activity {
                 if (player.isCurrentWindowSeekable()) {
                     mPrefs.updatePosition(player.getCurrentPosition());
                 }
-                mPrefs.updateMeta(getSelectedTrackAudio(false), getSelectedTrackAudio(true), getSelectedTrackSubtitle(), playerView.getResizeMode(), playerView.getVideoSurfaceView().getScaleX());
+                mPrefs.updateMeta(getSelectedTrackAudio(false), getSelectedTrackAudio(true), playerView.getResizeMode(), playerView.getVideoSurfaceView().getScaleX());
             }
 
             if (player.isPlaying()) {
@@ -925,8 +817,6 @@ public class PlayerActivity extends Activity {
             player = null;
         }
         titleView.setVisibility(View.GONE);
-        if (buttonPiP != null)
-            Utils.setButtonEnabled(this, buttonPiP, false);
         Utils.setButtonEnabled(this, buttonAspectRatio, false);
     }
 
@@ -935,13 +825,6 @@ public class PlayerActivity extends Activity {
         public void onIsPlayingChanged(boolean isPlaying) {
             playerView.setKeepScreenOn(isPlaying);
 
-            if (isPiPSupported()) {
-                if (isPlaying) {
-                    updatePictureInPictureActions(R.drawable.ic_pause_24dp, "Pause", CONTROL_TYPE_PAUSE, REQUEST_PAUSE);
-                } else {
-                    updatePictureInPictureActions(R.drawable.ic_play_arrow_24dp, "Play", CONTROL_TYPE_PLAY, REQUEST_PLAY);
-                }
-            }
 
             if (!isScrubbing) {
                 if (isPlaying) {
@@ -1005,8 +888,6 @@ public class PlayerActivity extends Activity {
                         setSelectedTrackAudio(mPrefs.audioTrack, false);
                         setSelectedTrackAudio(mPrefs.audioTrackFfmpeg, true);
                     }
-                    if (mPrefs.subtitleTrack != -1 && (mPrefs.subtitleTrack < getTrackCountSubtitle() || mPrefs.subtitleTrack == Integer.MIN_VALUE))
-                        setSelectedTrackSubtitle(mPrefs.subtitleTrack);
                 }
             }
         }
@@ -1033,45 +914,6 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    private void openFile(Uri pickerInitialUri) {
-        if (Utils.isTvBox(this)) {
-            Utils.alternativeChooser(this, pickerInitialUri, true);
-        } else {
-            enableRotation();
-
-            final Intent intent = createBaseFileIntent(Intent.ACTION_OPEN_DOCUMENT, pickerInitialUri);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("video/*");
-
-            safelyStartActivityForResult(intent, REQUEST_CHOOSER_VIDEO);
-        }
-    }
-
-    private void loadSubtitleFile(Uri pickerInitialUri) {
-        Toast.makeText(PlayerActivity.this, R.string.open_subtitles, Toast.LENGTH_SHORT).show();
-
-        if (Utils.isTvBox(this)) {
-            Utils.alternativeChooser(this, pickerInitialUri, false);
-        } else {
-            enableRotation();
-
-            final Intent intent = createBaseFileIntent(Intent.ACTION_OPEN_DOCUMENT, pickerInitialUri);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("*/*");
-
-            final String[] supportedMimeTypes = {
-                    MimeTypes.APPLICATION_SUBRIP,
-                    MimeTypes.TEXT_SSA,
-                    MimeTypes.TEXT_VTT,
-                    MimeTypes.APPLICATION_TTML,
-                    "text/*",
-                    "application/octet-stream"
-            };
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, supportedMimeTypes);
-
-            safelyStartActivityForResult(intent, REQUEST_CHOOSER_SUBTITLE);
-        }
-    }
 
     private void requestDirectoryAccess() {
         enableRotation();
@@ -1107,54 +949,6 @@ public class PlayerActivity extends Activity {
             showSnack(getText(R.string.error_files_missing).toString(), intent.toString());
         else
             startActivityForResult(intent, code);
-    }
-
-    public void setSelectedTrackSubtitle(final int trackIndex) {
-        final MappingTrackSelector.MappedTrackInfo mappedTrackInfo = trackSelector.getCurrentMappedTrackInfo();
-        if (mappedTrackInfo != null) {
-            final DefaultTrackSelector.Parameters parameters = trackSelector.getParameters();
-            final DefaultTrackSelector.ParametersBuilder parametersBuilder = parameters.buildUpon();
-            for (int rendererIndex = 0; rendererIndex < mappedTrackInfo.getRendererCount(); rendererIndex++) {
-                if (mappedTrackInfo.getRendererType(rendererIndex) == C.TRACK_TYPE_TEXT) {
-                    if (trackIndex == Integer.MIN_VALUE) {
-                        parametersBuilder.setRendererDisabled(rendererIndex, true);
-                    } else {
-                        parametersBuilder.setRendererDisabled(rendererIndex, false);
-                        if (trackIndex == -1) {
-                            parametersBuilder.clearSelectionOverrides(rendererIndex);
-                        } else {
-                            final int [] tracks = {0};
-                            final DefaultTrackSelector.SelectionOverride selectionOverride = new DefaultTrackSelector.SelectionOverride(trackIndex, tracks);
-                            parametersBuilder.setSelectionOverride(rendererIndex, mappedTrackInfo.getTrackGroups(rendererIndex), selectionOverride);
-                        }
-                    }
-                }
-            }
-            trackSelector.setParameters(parametersBuilder);
-        }
-    }
-
-    public int getSelectedTrackSubtitle() {
-        if (trackSelector != null) {
-            final MappingTrackSelector.MappedTrackInfo mappedTrackInfo = trackSelector.getCurrentMappedTrackInfo();
-            if (mappedTrackInfo != null) {
-                for (int rendererIndex = 0; rendererIndex < mappedTrackInfo.getRendererCount(); rendererIndex++) {
-                    if (mappedTrackInfo.getRendererType(rendererIndex) == C.TRACK_TYPE_TEXT) {
-                        final TrackGroupArray trackGroups = mappedTrackInfo.getTrackGroups(rendererIndex);
-                        final DefaultTrackSelector.SelectionOverride selectionOverride = trackSelector.getParameters().getSelectionOverride(rendererIndex, trackGroups);
-                        DefaultTrackSelector.Parameters parameters = trackSelector.getParameters();
-                        if (parameters.getRendererDisabled(rendererIndex)) {
-                            return Integer.MIN_VALUE;
-                        }
-                        if (selectionOverride == null) {
-                            return -1;
-                        }
-                        return selectionOverride.groupIndex;
-                    }
-                }
-            }
-        }
-        return -1;
     }
 
     public int getSelectedTrackAudio(final boolean ffmpeg) {
@@ -1213,53 +1007,8 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    public int getTrackCountSubtitle() {
-        if (trackSelector != null) {
-            final MappingTrackSelector.MappedTrackInfo mappedTrackInfo = trackSelector.getCurrentMappedTrackInfo();
-            if (mappedTrackInfo != null) {
-                for (int rendererIndex = 0; rendererIndex < mappedTrackInfo.getRendererCount(); rendererIndex++) {
-                    if (mappedTrackInfo.getRendererType(rendererIndex) == C.TRACK_TYPE_TEXT) {
-                        final TrackGroupArray trackGroups = mappedTrackInfo.getTrackGroups(rendererIndex);
-                        return trackGroups.length;
-                    }
-                }
-            }
-        }
-        return 0;
-    }
 
-    void setSubtitleTextSize() {
-        setSubtitleTextSize(getResources().getConfiguration().orientation);
-    }
 
-    void setSubtitleTextSize(final int orientation) {
-        // Tweak text size as fraction size doesn't work well in portrait
-        final SubtitleView subtitleView = playerView.getSubtitleView();
-        if (subtitleView != null) {
-            final float size;
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                size = SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitlesScale;
-            } else {
-                DisplayMetrics metrics = getResources().getDisplayMetrics();
-                float ratio = ((float)metrics.heightPixels / (float)metrics.widthPixels);
-                if (ratio < 1)
-                    ratio = 1 / ratio;
-                size = SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * subtitlesScale / ratio;
-            }
-
-            subtitleView.setFractionalTextSize(size);
-        }
-    }
-
-    void setSubtitleTextSizePiP() {
-        final SubtitleView subtitleView = playerView.getSubtitleView();
-        if (subtitleView != null)
-            subtitleView.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 2);
-    }
-
-    boolean isPiPSupported() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
-    }
 
     @TargetApi(26)
     void updatePictureInPictureActions(final int iconId, final String title, final int controlType, final int requestCode) {
@@ -1273,17 +1022,12 @@ public class PlayerActivity extends Activity {
     }
 
     private boolean isInPip() {
-        if (!isPiPSupported())
-            return false;
         return isInPictureInPictureMode();
     }
 
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-
-        if (!isInPip())
-            setSubtitleTextSize(newConfig.orientation);
     }
 
     void showError(ExoPlaybackException error) {
@@ -1339,77 +1083,8 @@ public class PlayerActivity extends Activity {
         }
     }
 
-    void updateSubtitleStyle() {
-        final CaptioningManager captioningManager = (CaptioningManager) getSystemService(Context.CAPTIONING_SERVICE);
-        final SubtitleView subtitleView = playerView.getSubtitleView();
-        if (!captioningManager.isEnabled()) {
-            subtitlesScale = 1.05f;
-            final CaptionStyleCompat captionStyle = new CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, Typeface.DEFAULT_BOLD);
-            if (subtitleView != null) {
-                subtitleView.setStyle(captionStyle);
-                subtitleView.setApplyEmbeddedStyles(true);
-            }
-        } else {
-            subtitlesScale = captioningManager.getFontScale();
-            if (subtitleView != null) {
-                subtitleView.setUserDefaultStyle();
-                // Do not apply embedded style as currently the only supported color style is PrimaryColour
-                // https://github.com/google/ExoPlayer/issues/8435#issuecomment-762449001
-                // This may result in poorly visible text (depending on user's selected edgeColor)
-                // The same can happen with style provided using setStyle but enabling CaptioningManager should be a way to change the behavior
-                subtitleView.setApplyEmbeddedStyles(false);
-            }
-        }
 
-        if (subtitleView != null)
-            subtitleView.setBottomPaddingFraction(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION * 2f / 3f);
 
-        setSubtitleTextSize();
-    }
-
-    void searchSubtitles() {
-        if (mPrefs.mediaUri == null)
-            return;
-
-        if (mPrefs.scopeUri != null || Utils.isTvBox(this)) {
-            DocumentFile video = null;
-            File videoRaw = null;
-
-            if (!Utils.isTvBox(this) && mPrefs.scopeUri != null) {
-                if ("com.android.externalstorage.documents".equals(mPrefs.mediaUri.getHost())) {
-                    // Fast search based on path in uri
-                    video = SubtitleUtils.findUriInScope(this, mPrefs.scopeUri, mPrefs.mediaUri);
-                } else {
-                    // Slow search based on matching metadata, no path in uri
-                    // Provider "com.android.providers.media.documents" when using "Videos" tab in file picker
-                    DocumentFile fileScope = DocumentFile.fromTreeUri(this, mPrefs.scopeUri);
-                    DocumentFile fileMedia = DocumentFile.fromSingleUri(this, mPrefs.mediaUri);
-                    video = SubtitleUtils.findDocInScope(fileScope, fileMedia);
-                }
-            } else if (Utils.isTvBox(this)) {
-                videoRaw = new File(mPrefs.mediaUri.getSchemeSpecificPart());
-                video = DocumentFile.fromFile(videoRaw);
-            }
-
-            if (video != null) {
-                DocumentFile subtitle;
-                if (!Utils.isTvBox(this)) {
-                    subtitle = SubtitleUtils.findSubtitle(video);
-                } else {
-                    File parentRaw = videoRaw.getParentFile();
-                    DocumentFile dir = DocumentFile.fromFile(parentRaw);
-                    subtitle = SubtitleUtils.findSubtitle(video, dir);
-                }
-
-                if (subtitle != null) {
-                    Uri subtitleUri = subtitle.getUri();
-                    SubtitleUtils.clearCache(this);
-                    subtitleUri = SubtitleUtils.convertToUTF(this, subtitleUri);
-                    mPrefs.updateSubtitle(subtitleUri);
-                }
-            }
-        }
-    }
 
     Uri findNext() {
         // TODO: Unify with searchSubtitles()
@@ -1420,13 +1095,11 @@ public class PlayerActivity extends Activity {
             if (!Utils.isTvBox(this) && mPrefs.scopeUri != null) {
                 if ("com.android.externalstorage.documents".equals(mPrefs.mediaUri.getHost())) {
                     // Fast search based on path in uri
-                    video = SubtitleUtils.findUriInScope(this, mPrefs.scopeUri, mPrefs.mediaUri);
                 } else {
                     // Slow search based on matching metadata, no path in uri
                     // Provider "com.android.providers.media.documents" when using "Videos" tab in file picker
                     DocumentFile fileScope = DocumentFile.fromTreeUri(this, mPrefs.scopeUri);
                     DocumentFile fileMedia = DocumentFile.fromSingleUri(this, mPrefs.mediaUri);
-                    video = SubtitleUtils.findDocInScope(fileScope, fileMedia);
                 }
             } else if (Utils.isTvBox(this)) {
                 videoRaw = new File(mPrefs.mediaUri.getSchemeSpecificPart());
@@ -1436,14 +1109,9 @@ public class PlayerActivity extends Activity {
             if (video != null) {
                 DocumentFile next;
                 if (!Utils.isTvBox(this)) {
-                    next = SubtitleUtils.findNext(video);
                 } else {
                     File parentRaw = videoRaw.getParentFile();
                     DocumentFile dir = DocumentFile.fromFile(parentRaw);
-                    next = SubtitleUtils.findNext(video, dir);
-                }
-                if (next != null) {
-                    return next.getUri();
                 }
             }
         }
@@ -1457,9 +1125,6 @@ public class PlayerActivity extends Activity {
         );
         builder.setNegativeButton(android.R.string.cancel, (dialog, which) -> {
             mPrefs.markScopeAsked();
-            if (loadSubtitlesOnCancel) {
-                loadSubtitleFile(mPrefs.mediaUri);
-            }
             if (skipToNextOnCancel) {
                 nextUri = findNext();
                 if (nextUri != null) {
@@ -1495,10 +1160,7 @@ public class PlayerActivity extends Activity {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onUserLeaveHint() {
-        if (mPrefs!= null && mPrefs.autoPiP && player != null && player.isPlaying() && isPiPSupported())
-            enterPiP();
-        else
-            super.onUserLeaveHint();
+        super.onUserLeaveHint();
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -1598,7 +1260,6 @@ public class PlayerActivity extends Activity {
         if (nextUri != null) {
             releasePlayer();
             mPrefs.updateMedia(this, nextUri, null);
-            searchSubtitles();
             initializePlayer();
         }
     }
