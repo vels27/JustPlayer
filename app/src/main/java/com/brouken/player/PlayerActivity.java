@@ -24,6 +24,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Icon;
 import android.media.AudioManager;
 import android.media.audiofx.LoudnessEnhancer;
+import android.media.CaptioningManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -118,18 +119,18 @@ public class PlayerActivity extends Activity {
 
     // State variables
     private boolean alive;
-    private boolean focusPlay;
-    private boolean restorePlayState;
-    private boolean restoreOrientationLock;
-    private boolean restoreControllerTimeout;
-    private boolean shortControllerTimeout;
-    private boolean isScrubbing;
-    private boolean scrubbingNoticeable;
-    private boolean frameRendered;
-    private long scrubbingStart;
-    private float subtitlesScale;
-    private Uri nextUri;
-    private boolean play;
+    public static boolean focusPlay;
+    public static boolean restorePlayState;
+    public static boolean restoreOrientationLock;
+    public static boolean restoreControllerTimeout;
+    public static boolean shortControllerTimeout;
+    public static boolean isScrubbing;
+    public static boolean scrubbingNoticeable;
+    public static boolean frameRendered;
+    public static long scrubbingStart;
+    public static float subtitlesScale;
+    public static Uri nextUri;
+    public static boolean play;
 
     private static final int REQUEST_CHOOSER_VIDEO = 1;
     private static final int REQUEST_CHOOSER_SUBTITLE = 2;

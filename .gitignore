@@ -1,9 +1,3 @@
 ```
-# Environment
-.env
-.env.local
-*.env.*
-
-# Local configuration
-local.properties
+.gradle/
 ```
