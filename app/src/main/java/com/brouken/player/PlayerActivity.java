@@ -24,7 +24,6 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Icon;
 import android.media.AudioManager;
 import android.media.audiofx.LoudnessEnhancer;
-import android.media.CaptioningManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -352,7 +351,7 @@ public class PlayerActivity extends Activity {
                 controllerVisible = visibility == View.VISIBLE;
                 controllerVisibleFully = playerView.isControllerFullyVisible();
 
-                if (PlayerActivity.restoreControllerTimeout) {
+                if (restoreControllerTimeout) {
                     restoreControllerTimeout = false;
                     if (player == null || !player.isPlaying()) {
                         playerView.setControllerShowTimeoutMs(-1);
@@ -1196,26 +1195,12 @@ public class PlayerActivity extends Activity {
     }
 
     void updateSubtitleStyle() {
-        final CaptioningManager captioningManager = (CaptioningManager) getSystemService(Context.CAPTIONING_SERVICE);
         final SubtitleView subtitleView = playerView.getSubtitleView();
-        if (!captioningManager.isEnabled()) {
-            subtitlesScale = 1.05f;
-            final CaptionStyleCompat captionStyle = new CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, Typeface.DEFAULT_BOLD);
-            if (subtitleView != null) {
-                subtitleView.setStyle(captionStyle);
-                subtitleView.setApplyEmbeddedStyles(true);
-            }
-        } else {
-            subtitlesScale = captioningManager.getFontScale();
-            if (subtitleView != null) {
-                subtitleView.setUserDefaultStyle();
-                // Do not apply embedded style as currently the only supported color style is PrimaryColour
-                // https://github.com/google/ExoPlayer/issues/8435#issuecomment-762449001
-                // This may result in poorly visible text (depending on user's selected edgeColor)
-                // The same can happen with style provided using setStyle but enabling CaptioningManager should be a way to change the behavior
-                subtitleView.setApplyEmbeddedStyles(false);
-            }
+        if (subtitleView != null) {
+            subtitleView.setUserDefaultStyle();
+            subtitleView.setApplyEmbeddedStyles(true);
         }
+        subtitlesScale = 1.05f;
 
         if (subtitleView != null)
             subtitleView.setBottomPaddingFraction(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION * 2f / 3f);
