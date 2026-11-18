@@ -38,6 +38,7 @@ import android.view.KeyEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
@@ -76,9 +77,11 @@ import com.google.android.exoplayer2.ui.TimeBar;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.File;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -121,6 +124,8 @@ public class PlayerActivity extends Activity {
     private TextView titleView;
 
     private ImageButton buttonAspectRatio;
+    private Button buttonScreenModeDef;
+    private Button buttonScreenModeA2;
     private ImageButton exoPlayPause;
     private ProgressBar loadingProgressBar;
     private StyledPlayerControlView controlView;
@@ -359,6 +364,38 @@ public class PlayerActivity extends Activity {
         final LinearLayout controls = horizontalScrollView.findViewById(R.id.controls);
 
 
+        // Screen mode switcher (Haoqing A8 / RK3566): Def = default (-1), A2 = 13
+        final LinearLayout screenModeBlock = new LinearLayout(this);
+        screenModeBlock.setOrientation(LinearLayout.HORIZONTAL);
+        screenModeBlock.setBackgroundResource(R.drawable.rounded_controls_background);
+        final int blockPadding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
+        screenModeBlock.setPadding(blockPadding, blockPadding, blockPadding, blockPadding);
+
+        final int buttonPadding = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10, getResources().getDisplayMetrics());
+        final int buttonPaddingVertical = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6, getResources().getDisplayMetrics());
+
+        buttonScreenModeDef = new Button(this);
+        buttonScreenModeDef.setText(R.string.screen_mode_def);
+        buttonScreenModeDef.setTextColor(Color.WHITE);
+        buttonScreenModeDef.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        buttonScreenModeDef.setPadding(buttonPadding, buttonPaddingVertical, buttonPadding, buttonPaddingVertical);
+        buttonScreenModeDef.setBackgroundColor(Color.TRANSPARENT);
+        buttonScreenModeDef.setContentDescription(getString(R.string.screen_mode_content_description_def));
+        buttonScreenModeDef.setOnClickListener(view -> applyScreenMode(-1, R.string.screen_mode_def));
+        screenModeBlock.addView(buttonScreenModeDef);
+
+        buttonScreenModeA2 = new Button(this);
+        buttonScreenModeA2.setText(R.string.screen_mode_a2);
+        buttonScreenModeA2.setTextColor(Color.WHITE);
+        buttonScreenModeA2.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        buttonScreenModeA2.setPadding(buttonPadding, buttonPaddingVertical, buttonPadding, buttonPaddingVertical);
+        buttonScreenModeA2.setBackgroundColor(Color.TRANSPARENT);
+        buttonScreenModeA2.setContentDescription(getString(R.string.screen_mode_content_description_a2));
+        buttonScreenModeA2.setOnClickListener(view -> applyScreenMode(13, R.string.screen_mode_a2));
+        screenModeBlock.addView(buttonScreenModeA2);
+
+        controls.addView(screenModeBlock, 0);
+
         controls.addView(buttonAspectRatio);
 
         if (!Utils.isTvBox(this)) {
@@ -412,6 +449,8 @@ public class PlayerActivity extends Activity {
                 }
             }
         });
+
+        refreshScreenMode(null);
     }
 
     @Override
@@ -424,6 +463,7 @@ public class PlayerActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
+        refreshScreenMode(null);
     }
 
     @Override
@@ -773,6 +813,11 @@ public class PlayerActivity extends Activity {
 
             Utils.setButtonEnabled(this, buttonAspectRatio, true);
 
+            buttonScreenModeDef.setEnabled(true);
+            buttonScreenModeA2.setEnabled(true);
+            buttonScreenModeDef.setAlpha(1f);
+            buttonScreenModeA2.setAlpha(1f);
+
             ((DoubleTapPlayerView)playerView).setDoubleTapEnabled(true);
 
             nextUri = findNext();
@@ -818,6 +863,11 @@ public class PlayerActivity extends Activity {
         }
         titleView.setVisibility(View.GONE);
         Utils.setButtonEnabled(this, buttonAspectRatio, false);
+
+        buttonScreenModeDef.setEnabled(false);
+        buttonScreenModeA2.setEnabled(false);
+        buttonScreenModeDef.setAlpha(0.3f);
+        buttonScreenModeA2.setAlpha(0.3f);
     }
 
     private class PlaybackStateListener implements Player.EventListener{
@@ -1140,6 +1190,58 @@ public class PlayerActivity extends Activity {
         if (haveMedia && player != null && player.isPlaying()) {
             // Keep controller UI visible - alternative to resetHideCallbacks()
             playerView.setControllerShowTimeoutMs(PlayerActivity.CONTROLLER_TIMEOUT);
+        }
+    }
+
+    // Switch Haoqing A8 / RK3566 screen update mode via setprop (needs root, see README)
+    private void applyScreenMode(final int mode, final int labelResId) {
+        new Thread(() -> {
+            runShell(new String[]{"su", "-c", "setprop sys.hq.updatemode " + mode});
+            refreshScreenMode(labelResId);
+        }).start();
+    }
+
+    // Read the current mode and highlight the active button; show feedback when a mode was just applied
+    private void refreshScreenMode(final Integer labelResId) {
+        new Thread(() -> {
+            final String current = runShell(new String[]{"su", "-c", "getprop sys.hq.updatemode"});
+            runOnUiThread(() -> {
+                final boolean defActive = "-1".equals(current);
+                final boolean a2Active = "13".equals(current);
+
+                buttonScreenModeDef.setBackgroundResource(defActive ? R.drawable.screen_mode_active : 0);
+                buttonScreenModeA2.setBackgroundResource(a2Active ? R.drawable.screen_mode_active : 0);
+                buttonScreenModeDef.setAlpha(defActive ? 1f : 0.6f);
+                buttonScreenModeA2.setAlpha(a2Active ? 1f : 0.6f);
+
+                if (labelResId != null) {
+                    if (current == null) {
+                        Utils.showText(playerView, getString(R.string.screen_mode_error));
+                    } else {
+                        Utils.showText(playerView, getString(R.string.screen_mode_applied, getString(labelResId)));
+                    }
+                }
+            });
+        }).start();
+    }
+
+    // Execute a shell command through su and return its stdout (trimmed), or null on failure
+    private String runShell(final String[] command) {
+        try {
+            final Process process = Runtime.getRuntime().exec(command);
+            final StringBuilder output = new StringBuilder();
+            try (final InputStream inputStream = process.getInputStream()) {
+                final byte[] buffer = new byte[1024];
+                int read;
+                while ((read = inputStream.read(buffer)) > 0) {
+                    output.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
+                }
+            }
+            process.waitFor();
+            return output.toString().trim();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 

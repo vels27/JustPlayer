@@ -19,4 +19,11 @@
 
     <string name="delete_query">Delete this file?</string>
     <string name="delete_confirmation">Delete</string>
+
+    <string name="screen_mode_def">Def</string>
+    <string name="screen_mode_a2">A2</string>
+    <string name="screen_mode_applied">Screen mode: %s</string>
+    <string name="screen_mode_error">Failed to switch screen mode</string>
+    <string name="screen_mode_content_description_def">Screen mode Def</string>
+    <string name="screen_mode_content_description_a2">Screen mode A2</string>
 </resources>
